@@ -1,24 +1,24 @@
 extends Area2D
 
 signal hit
+
 @export var speed = 400
 var screen_size
 var joystick
 
-# Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	screen_size = get_viewport_rect().size
-	joystick = $CanvasLayer/Joystick  # Assuming you've added the Joystick as a child of a CanvasLayer
-	#hide()
+	var hud = get_node("/root/Main/HUD")  # Adjust this path to match your scene structure
+	if hud:
+		joystick = hud.get_node("Joystick")
+	if not joystick:
+		print("Joystick not found!")
 
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
 	var velocity = Vector2.ZERO # The player's movement vector.
 	
-	if DisplayServer.is_touchscreen_available():
-		# Use joystick input on touch devices
-		velocity = joystick.get_value()
+	if DisplayServer.is_touchscreen_available() and joystick:
+		velocity = joystick.get_value() * speed
 	else:
 		# Use keyboard input on non-touch devices
 		if Input.is_action_pressed("move_right"):
@@ -29,32 +29,23 @@ func _process(delta: float) -> void:
 			velocity.y += 1
 		if Input.is_action_pressed("move_up"):
 			velocity.y -= 1
+		velocity = velocity.normalized() * speed
 
 	if velocity.length() > 0:
-		velocity = velocity.normalized() * speed
-		$AnimatedSprite2D.play()
-	else:
-		$AnimatedSprite2D.stop()
+		position += velocity * delta
+		position = position.clamp(Vector2.ZERO, screen_size)
 	
-	position += velocity * delta
-	position = position.clamp(Vector2.ZERO, screen_size)
-	if velocity.x != 0:
-		$AnimatedSprite2D.animation = "walk"
-		$AnimatedSprite2D.flip_v = false
-		# See the note below about the following boolean assignment.
-		$AnimatedSprite2D.flip_h = velocity.x < 0
-	elif velocity.y != 0:
-		$AnimatedSprite2D.animation = "up"
-		$AnimatedSprite2D.flip_v = velocity.y > 0
+	print("Player position: ", position)  # Debug print
 
-
-func _on_body_entered(_body: Node2D) -> void:
-	hide() # Player disappears after being hit.
-	hit.emit()
-	# Must be deferred as we can't change physics properties on a physics callback.
-	$CollisionShape2D.set_deferred("disabled", true) # Replace with function body.
-	
 func start(pos):
 	position = pos
 	show()
 	$CollisionShape2D.disabled = false
+	set_process(true)  # Enable processing when the game starts
+
+func _on_body_entered(body: Node2D) -> void:
+	hide()  # Player disappears after being hit.
+	hit.emit()
+	# Must be deferred as we can't change physics properties on a physics callback.
+	$CollisionShape2D.set_deferred("disabled", true)
+	set_process(false)  # Disable processing when the game ends
